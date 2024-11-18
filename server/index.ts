@@ -1,12 +1,12 @@
-import { config } from 'dotenv';
+import { config } from "dotenv";
 config();
-import { buildSchema } from 'graphql';
-import { ApolloServer } from '@apollo/server';
-import { drizzle } from 'drizzle-orm/libsql';
-import { createClient } from '@libsql/client';
-import { eq } from 'drizzle-orm';
-import * as dbSchema from './schema.js';
-import { startStandaloneServer } from '@apollo/server/standalone';
+import { ApolloServer } from "@apollo/server";
+import { drizzle } from "drizzle-orm/libsql";
+import { createClient } from "@libsql/client";
+import { eq } from "drizzle-orm";
+import * as dbSchema from "./schema.js";
+import { startStandaloneServer } from "@apollo/server/standalone";
+import gql from "graphql-tag";
 
 const client = createClient({
   url: process.env.TURSO_CONNECTION_URL as string,
@@ -15,7 +15,8 @@ const client = createClient({
 
 const db = drizzle({ client, schema: dbSchema });
 
-const typeDefs = `
+// GraphQL schema definition
+export const typeDefs = gql`
   type Post {
     id: Int!
     year: String!
@@ -47,20 +48,22 @@ const typeDefs = `
       purchased: String!
       condition: String!
       fact: String!
-    ): Post
+    ): Post!
+
     updatePost(
       id: Int!
-      year: String!
-      publisher: String!
-      printedCountry: String!
-      illustrator: String!
-      ISBN: String!
-      price: String!
-      purchased: String!
-      condition: String!
-      fact: String!
-    ): Post
-    deletePost(id: Int!): Boolean
+      year: String
+      publisher: String
+      printedCountry: String
+      illustrator: String
+      ISBN: String
+      price: String
+      purchased: String
+      condition: String
+      fact: String
+    ): Post!
+
+    deletePost(id: Int!): Boolean!
   }
 `;
 
@@ -73,17 +76,25 @@ export const resolvers = {
 
     getPost: async (_: any, { id }: { id: number }) => {
       // Fetch a single post by ID
-      return db.select().from(dbSchema.aliceTable).where(eq(dbSchema.aliceTable.id, id));
+      const post = await db
+        .select()
+        .from(dbSchema.aliceTable)
+        .where(eq(dbSchema.aliceTable.id, id))
+        .limit(1)
+        .then(rows => rows[0]); // Get the first row from the result
+    
+      if (!post) {
+        throw new Error(`Post with ID ${id} not found`);
+      }
+    
+      return post;
     },
   },
 
   Mutation: {
     createPost: async (
       _: any,
-      { year, publisher, printedCountry, illustrator, ISBN, price, purchased, condition, fact }: any
-    ) => {
-      // Insert a new post into the database
-      const newPost = await db.insert(dbSchema.aliceTable).values({
+      {
         year,
         publisher,
         printedCountry,
@@ -93,16 +104,44 @@ export const resolvers = {
         purchased,
         condition,
         fact,
-      }).returning();
+      }: any
+    ) => {
+      // Insert a new post into the database
+      const newPost = await db
+        .insert(dbSchema.aliceTable)
+        .values({
+          year,
+          publisher,
+          printedCountry,
+          illustrator,
+          ISBN,
+          price,
+          purchased,
+          condition,
+          fact,
+        })
+        .returning();
       return newPost[0];
     },
 
     updatePost: async (
       _: any,
-      { id, year, publisher, printedCountry, illustrator, ISBN, price, purchased, condition, fact }: any
+      {
+        id,
+        year,
+        publisher,
+        printedCountry,
+        illustrator,
+        ISBN,
+        price,
+        purchased,
+        condition,
+        fact,
+      }: any
     ) => {
       // Update an existing post
-      const updatedPost = await db.update(dbSchema.aliceTable)
+      const updatedPost = await db
+        .update(dbSchema.aliceTable)
         .set({
           year,
           publisher,
@@ -122,13 +161,14 @@ export const resolvers = {
 
     deletePost: async (_: any, { id }: { id: number }) => {
       // Delete a post by ID
-      const result = await db.delete(dbSchema.aliceTable).where(eq(dbSchema.aliceTable.id, id)).returning();
+      const result = await db
+        .delete(dbSchema.aliceTable)
+        .where(eq(dbSchema.aliceTable.id, id))
+        .returning();
       return result.length > 0;
     },
   },
 };
-
-const schema = buildSchema(typeDefs);
 
 const server = new ApolloServer({
   typeDefs,

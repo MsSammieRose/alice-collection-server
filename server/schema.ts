@@ -34,6 +34,4 @@ export const aliceTable = sqliteTable("posts", {
   ),
 });
 
-export type InsertPosts = typeof aliceTable.$inferInsert
-export type SelectPosts = typeof aliceTable.$inferSelect
 
